@@ -1,0 +1,42 @@
+name: Chef CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  setup-chef:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Chef Workstation
+        run: |
+          curl -L https://omnitruck.chef.io/install.sh | sudo bash
+
+      - name: Install dependencies
+        run: sudo chef gem install kitchen-docker inspec
+
+      - name: Test Apache2 Cookbook with ChefSpec
+        working-directory: cookbooks/apache2
+        run: chef exec rspec
+
+      - name: Test Apache2 with Test Kitchen
+        working-directory: cookbooks/apache2
+        run: kitchen test
+
+  deploy:
+    needs: setup-chef
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Deploy to PC-1
+        run: |
+          scp -i PC-1.pem -o StrictHostKeyChecking=no cookbooks/apache2/recipes/default.rb user@PC-1-ip:/tmp/
+          ssh -i PC-1.pem -o StrictHostKeyChecking=no user@PC-1-ip "sudo chef-client"
+
